@@ -1,123 +1,49 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Let YouTube receive the site's HTTPS referrer -->
-  <meta name="referrer" content="strict-origin-when-cross-origin">
-
-  <title>Chaos Projector Player</title>
-
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #000;
-    }
-
-    #player {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      border: 0;
-      background: #000;
-    }
-
-    #error {
-      position: fixed;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      background: #000;
-      color: white;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 30px;
-      box-sizing: border-box;
-    }
-  </style>
-</head>
-
-<body>
-
-  <iframe
-    id="player"
-    allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-    allowfullscreen
-    referrerpolicy="strict-origin-when-cross-origin">
-  </iframe>
-
-  <div id="error">
-    <div>
-      <h2>Chaos Projector</h2>
-      <p>No YouTube video was supplied.</p>
-    </div>
-  </div>
-
-  <script>
-    function getVideoId() {
-      const params = new URLSearchParams(window.location.search);
-
-      let id =
-        params.get("video") ||
-        params.get("v") ||
-        params.get("videoId");
-
-      if (id) {
-        return id.trim();
-      }
-
-      const hash = window.location.hash.replace("#", "").trim();
-
-      if (hash) {
-        return hash;
-      }
-
-      return null;
-    }
-
-    function loadVideo() {
-      const videoId = getVideoId();
-
-      if (!videoId) {
-        document.getElementById("error").style.display = "flex";
-        return;
-      }
-
-      const cleanId = videoId.replace(/[^a-zA-Z0-9_-]/g, "");
-
-      if (!cleanId) {
-        document.getElementById("error").style.display = "flex";
-        return;
-      }
-
-      const player = document.getElementById("player");
-
-      const url =
-        "https://www.youtube.com/embed/" +
-        encodeURIComponent(cleanId) +
-        "?autoplay=1" +
-        "&controls=1" +
-        "&playsinline=1" +
-        "&rel=0" +
-        "&modestbranding=1" +
-        "&enablejsapi=1" +
-        "&origin=" +
-        encodeURIComponent(window.location.origin) +
-        "&widget_referrer=" +
-        encodeURIComponent(window.location.origin);
-
-      player.src = url;
-    }
-
-    loadVideo();
-  </script>
-
-</body>
-</html>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Chaos Projector Player</title>
+<style>html,body,#player,#testCard{margin:0;padding:0;width:100%;height:100%;overflow:hidden}body{background:#05050a}#player iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#000}#testCard{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#05050a;color:#fff;font-family:Arial,sans-serif;text-align:center}#testCard h1{font-size:42px;margin:0 0 8px}#testCard h2{font-size:30px;color:#20c8ff;margin:0 0 12px}</style></head>
+<body><div id="player"></div><div id="testCard"><div><h1>CHAOS PROJECTOR</h1><h2>PROJECTOR READY</h2><p>Your screen is working correctly.</p><p>Paste a YouTube link in the Projector Control menu and press PLAY.</p></div></div>
+<script>
+const params=new URLSearchParams(location.search);
+const videoId=(params.get('video')||'').replace(/[^a-zA-Z0-9_-]/g,'');
+const isTest=params.get('test')==='1';
+let ytPlayer=null,apiReady=false,pendingVolume=80,pendingAudible=true,ready=false;
+const playerEl=document.getElementById('player'),testCard=document.getElementById('testCard');
+function showTest(){playerEl.style.display='none';testCard.style.display='flex';}
+function showVideo(){testCard.style.display='none';playerEl.style.display='block';}
+function clamp(v){return Math.max(0,Math.min(100,Number(v)||0));}
+function applyAudio(){
+  if(!ytPlayer||!ready)return;
+  const v=clamp(pendingVolume);
+  if(pendingAudible && v>0){
+    try{ytPlayer.unMute();}catch(_){}
+    try{ytPlayer.setVolume(v);}catch(_){}
+  }else{
+    try{ytPlayer.setVolume(0);}catch(_){}
+    try{ytPlayer.mute();}catch(_){}
+  }
+}
+function applyVolume(v){pendingVolume=clamp(v);applyAudio();try{if(ytPlayer&&ready){ytPlayer.setVolume(pendingVolume);if(pendingVolume>0)ytPlayer.unMute();}}catch(_){}}
+function applyRange(v){pendingVolume=clamp(v);pendingAudible=pendingVolume>0;applyAudio();}
+function handleMessage(d){
+ if(!d||!d.action)return;
+ switch(String(d.action)){
+  case 'volume': pendingAudible=true; applyVolume(d.volume); break;
+  case 'rangeVolume': applyRange(d.volume); break;
+  case 'play': if(ytPlayer&&ready){showVideo();try{ytPlayer.playVideo();}catch(_){}} break;
+  case 'stop': if(ytPlayer&&ready){try{ytPlayer.stopVideo();}catch(_){}} showTest(); break;
+ }
+}
+window.addEventListener('message',e=>{let d=e.data;if(typeof d==='string'){try{d=JSON.parse(d)}catch(_){return}}handleMessage(d)});
+function onYouTubeIframeAPIReady(){
+ apiReady=true;
+ if(!videoId){showTest();return;}
+ ytPlayer=new YT.Player('player',{videoId:videoId,width:'100%',height:'100%',playerVars:{autoplay:1,controls:1,playsinline:1,rel:0,modestbranding:1,origin:location.origin},events:{
+  onReady:()=>{ready=true;showVideo();applyAudio();try{ytPlayer.playVideo();}catch(_){}},
+  onStateChange:(e)=>{if(e.data===YT.PlayerState.ENDED)showTest();}
+ }});
+}
+if(isTest||!videoId){showTest();}else{const s=document.createElement('script');s.src='https://www.youtube.com/iframe_api';document.head.appendChild(s);}
+// Re-apply the current local audio state periodically. This prevents YouTube from
+// restoring its own volume after a player state change.
+setInterval(()=>{if(ready)applyAudio();},500);
+</script></body></html>
